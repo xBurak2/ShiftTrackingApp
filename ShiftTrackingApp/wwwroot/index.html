@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- API base URL: production'da nginx/reverse-proxy bu değeri ayarlar -->
+  <meta name="api-base" content="" />
+  <title>Shiftex — Vardiya & Devam Takip</title>
+  <link rel="stylesheet" href="/css/app.css" />
+  <!-- face-api.js CDN -->
+  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     LOGIN EKRANI
+═══════════════════════════════════════════════════════════════════════ -->
+<div id="login-screen" class="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <svg viewBox="0 0 48 48" fill="none">
+        <rect width="48" height="48" rx="12" fill="var(--accent)"/>
+        <path d="M12 16h24M12 24h16M12 32h20" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="36" cy="30" r="7" fill="#fff"/>
+        <path d="M33 30l2 2 4-4" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <span>Shiftex</span>
+    </div>
+    <h2>Hoş Geldiniz</h2>
+    <p class="login-sub">Sisteme giriş yapın</p>
+    <div id="login-error" class="login-error hidden"></div>
+    <label>E-posta
+      <input id="login-email" type="email" autocomplete="username" placeholder="ornek@sirket.com" />
+    </label>
+    <label>Şifre
+      <input id="login-pass" type="password" autocomplete="current-password" placeholder="••••••••" />
+    </label>
+    <button id="login-btn" class="btn-primary">Giriş Yap</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     ANA UYGULAMA
+═══════════════════════════════════════════════════════════════════════ -->
+<div id="app" class="app hidden">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <svg viewBox="0 0 48 48" fill="none">
+        <rect width="48" height="48" rx="12" fill="var(--accent)"/>
+        <path d="M12 16h24M12 24h16M12 32h20" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="36" cy="30" r="7" fill="#fff"/>
+        <path d="M33 30l2 2 4-4" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <span>Shiftex</span>
+    </div>
+    <nav id="sidebar-nav"></nav>
+    <div class="sidebar-user" id="sidebar-user"></div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main-content">
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- DASHBOARD -->
+    <section id="page-dashboard" class="page hidden">
+      <h1 class="page-title">Dashboard</h1>
+      <div class="stat-grid" id="stat-grid"></div>
+      <div class="dash-grid">
+        <div class="dash-card">
+          <h3>Bugün Giriş Yapanlar</h3>
+          <div id="present-list" class="present-list"></div>
+        </div>
+        <div class="dash-card">
+          <h3>Bekleyen İzin Talepleri</h3>
+          <div id="pending-leaves-dash"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PERSONEL -->
+    <section id="page-employees" class="page hidden">
+      <div class="page-header">
+        <h1 class="page-title">Personel</h1>
+        <div class="page-actions">
+          <!-- Pagination bilgisi -->
+          <span id="user-page-info" class="page-info-text"></span>
+          <button class="btn-secondary" id="emp-prev-btn" onclick="empChangePage(-1)">‹ Önceki</button>
+          <button class="btn-secondary" id="emp-next-btn" onclick="empChangePage(1)">Sonraki ›</button>
+          <button class="btn-primary" id="add-emp-btn">+ Personel Ekle</button>
+        </div>
+      </div>
+      <div class="search-bar">
+        <input id="emp-search" type="text" placeholder="İsim veya e-posta ara…" oninput="filterEmployees()" />
+      </div>
+      <div class="table-wrap">
+        <table class="data-table" id="emp-table">
+          <thead>
+            <tr>
+              <th>Ad Soyad</th><th>E-posta</th><th>Departman</th>
+              <th>Pozisyon</th><th>Rol</th><th>İşlemler</th>
+            </tr>
+          </thead>
+          <tbody id="emp-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- VARDIYA PLANLAMA -->
+    <section id="page-roster" class="page hidden">
+      <div class="page-header">
+        <h1 class="page-title">Vardiya Planlama</h1>
+        <div class="page-actions">
+          <button class="btn-secondary" onclick="rosterNav(-1)">‹</button>
+          <span id="roster-week-label" class="week-label"></span>
+          <button class="btn-secondary" onclick="rosterNav(1)">›</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="roster-table" id="roster-table">
+          <thead><tr id="roster-head"></tr></thead>
+          <tbody id="roster-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- DEVAM TAKİP (ADMIN) -->
+    <section id="page-attendance" class="page hidden">
+      <div class="page-header">
+        <h1 class="page-title">Devam Takip</h1>
+        <div class="page-actions">
+          <!-- Yüz Tanıma butonu -->
+          <button class="btn-primary" id="face-co-btn" onclick="toggleCoCam()">📷 Yüz ile Çıkış</button>
+          <button class="btn-primary" id="face-cam-btn" onclick="toggleCam()">📷 Yüz ile Giriş</button>
+        </div>
+      </div>
+
+      <!-- Kamera paneli — Giriş -->
+      <div id="face-panel" class="face-panel hidden">
+        <div class="face-cam-wrap">
+          <video id="face-video" autoplay playsinline></video>
+          <canvas id="face-canvas"></canvas>
+        </div>
+        <div id="face-status" class="face-status"></div>
+      </div>
+
+      <!-- Kamera paneli — Çıkış -->
+      <div id="face-co-panel" class="face-panel hidden">
+        <div class="face-cam-wrap">
+          <video id="face-co-video" autoplay playsinline></video>
+          <canvas id="face-co-canvas"></canvas>
+        </div>
+        <div id="face-co-status" class="face-status"></div>
+      </div>
+
+      <div class="table-wrap" style="margin-top:1.5rem">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Personel</th><th>Giriş</th><th>Çıkış</th>
+              <th>Kaynak</th><th>Çalışılan</th><th>Durum</th>
+            </tr>
+          </thead>
+          <tbody id="att-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- DEVAM TAKİP (PERSONEL) -->
+    <section id="page-my-attendance" class="page hidden">
+      <div class="page-header">
+        <h1 class="page-title">Devam Durumum</h1>
+        <div class="page-actions">
+          <button class="btn-primary" id="checkin-btn" onclick="doCheckIn()">Giriş Yap</button>
+          <button class="btn-secondary" id="checkout-btn" onclick="doCheckOut()">Çıkış Yap</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr><th>Giriş</th><th>Çıkış</th><th>Kaynak</th><th>Çalışılan</th><th>Durum</th></tr>
+          </thead>
+          <tbody id="my-att-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- İZİN YÖNETİMİ (ADMIN) -->
+    <section id="page-leaves" class="page hidden">
+      <div class="page-header">
+        <h1 class="page-title">İzin Yönetimi</h1>
+        <div class="page-actions">
+          <select id="leave-filter" onchange="loadLeaves()">
+            <option value="">Tümü</option>
+            <option value="Pending">Bekleyen</option>
+            <option value="Approved">Onaylanan</option>
+            <option value="Rejected">Reddedilen</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Personel</th><th>Tür</th><th>Başlangıç</th><th>Bitiş</th>
+              <th>Gün</th><th>Durum</th><th>İşlem</th>
+            </tr>
+          </thead>
+          <tbody id="leave-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- İZİN TALEBİ (PERSONEL) -->
+    <section id="page-my-leaves" class="page hidden">
+      <div class="page-header">
+        <h1 class="page-title">İzin Taleplerim</h1>
+        <button class="btn-primary" onclick="openLeaveModal()">+ İzin Talebi</button>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr><th>Tür</th><th>Başlangıç</th><th>Bitiş</th><th>Gün</th><th>Durum</th><th>Tarih</th></tr>
+          </thead>
+          <tbody id="my-leave-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- VARDİYALARIM (PERSONEL) -->
+    <section id="page-my-shifts" class="page hidden">
+      <div class="page-header">
+        <h1 class="page-title">Vardiyalarım</h1>
+        <div class="page-actions">
+          <button class="btn-secondary" onclick="myShiftNav(-1)">‹</button>
+          <span id="my-shift-label" class="week-label"></span>
+          <button class="btn-secondary" onclick="myShiftNav(1)">›</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr><th>Tarih</th><th>Gün</th><th>Vardiya</th><th>Başlangıç</th><th>Bitiş</th></tr>
+          </thead>
+          <tbody id="my-shift-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- PROFİL -->
+    <section id="page-profile" class="page hidden">
+      <h1 class="page-title">Profilim</h1>
+      <div class="profile-grid">
+        <div class="profile-photo-col">
+          <div class="profile-avatar" id="profile-avatar"></div>
+          <label class="btn-secondary" style="cursor:pointer;margin-top:1rem">
+            Fotoğraf Değiştir
+            <input id="photo-input" type="file" accept="image/*" hidden onchange="handlePhoto(event)" />
+          </label>
+          <!-- Şifre Sıfırla -->
+          <div class="profile-pw-box">
+            <h4>Şifre Değiştir</h4>
+            <input id="new-pw" type="password" placeholder="Yeni şifre (min 6 karakter)" />
+            <button class="btn-primary" onclick="saveProfile()">Kaydet</button>
+          </div>
+        </div>
+        <div class="profile-info-col" id="profile-info"></div>
+      </div>
+    </section>
+
+    <!-- YÜZ KAYIT (ADMIN) -->
+    <section id="page-enroll" class="page hidden">
+      <div class="page-header">
+        <h1 class="page-title">Yüz Kaydı</h1>
+      </div>
+      <div class="enroll-grid">
+        <!-- Sol: kamera -->
+        <div class="enroll-cam-col">
+          <div class="face-cam-wrap">
+            <video id="enr-video" autoplay playsinline></video>
+            <canvas id="enr-canvas"></canvas>
+          </div>
+          <div class="enroll-controls">
+            <select id="enr-user-select">
+              <option value="">— Personel Seçin —</option>
+            </select>
+            <button class="btn-primary" id="enr-start-btn" onclick="startEnrCam()">Kamerayı Aç</button>
+            <button class="btn-primary hidden" id="enr-capture-btn" onclick="captureEnroll()">Yüzü Kaydet</button>
+            <button class="btn-secondary hidden" id="enr-stop-btn" onclick="stopEnrCam()">Kamerayı Kapat</button>
+          </div>
+          <div id="enr-status" class="face-status"></div>
+        </div>
+        <!-- Sağ: kayıtlı yüzler -->
+        <div class="enroll-list-col">
+          <h3>Kayıtlı Yüzler <span id="enr-count" class="badge">0</span></h3>
+          <div id="enr-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- AYLAR BAZLI DEVAM (ADMIN) -->
+    <section id="page-monthly" class="page hidden">
+      <h1 class="page-title">Aylık Devam Raporu</h1>
+      <div class="filter-bar">
+        <select id="monthly-user-sel"></select>
+        <select id="monthly-month-sel"></select>
+        <select id="monthly-year-sel"></select>
+        <button class="btn-primary" onclick="loadMonthlySummary()">Getir</button>
+      </div>
+      <div id="monthly-result"></div>
+    </section>
+
+    <!-- DEPARTMANLAR (ADMIN) -->
+    <section id="page-departments" class="page hidden">
+      <div class="page-header">
+        <h1 class="page-title">Departmanlar</h1>
+        <button class="btn-primary" onclick="openDeptModal()">+ Departman Ekle</button>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>ID</th><th>Ad</th><th>İşlem</th></tr></thead>
+          <tbody id="dept-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     MODAL'LAR
+═══════════════════════════════════════════════════════════════════════ -->
+
+<!-- Personel Modal -->
+<div id="emp-modal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="emp-modal-title">Personel</h3>
+      <button class="modal-close" onclick="closeModal('emp-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input id="emp-id" type="hidden" />
+      <label>Ad Soyad *<input id="emp-name" type="text" /></label>
+      <label>E-posta *<input id="emp-email" type="email" /></label>
+      <label id="emp-pw-label">Şifre *<input id="emp-pw" type="password" /></label>
+      <label>Rol
+        <select id="emp-role">
+          <option value="Employee">Personel</option>
+          <option value="Admin">Yönetici</option>
+        </select>
+      </label>
+      <label>Departman
+        <select id="emp-dept"></select>
+      </label>
+      <label>Pozisyon<input id="emp-pos" type="text" /></label>
+      <label>İşe Giriş<input id="emp-hire" type="date" /></label>
+      <label>Telefon<input id="emp-phone" type="tel" /></label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('emp-modal')">İptal</button>
+      <button class="btn-primary" onclick="saveEmployee()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<!-- Vardiya Modal -->
+<div id="shift-modal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Vardiya Ata</h3>
+      <button class="modal-close" onclick="closeModal('shift-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input id="shift-assign-id" type="hidden" />
+      <p id="shift-cell-info" class="shift-cell-info"></p>
+      <label>Personel
+        <select id="shift-user-sel"></select>
+      </label>
+      <label>Vardiya
+        <select id="shift-type-sel"></select>
+      </label>
+      <label>Not<input id="shift-note" type="text" /></label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('shift-modal')">İptal</button>
+      <button class="btn-danger hidden" id="shift-delete-btn" onclick="deleteShift()">Sil</button>
+      <button class="btn-primary" onclick="saveShift()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<!-- İzin Talebi Modal -->
+<div id="leave-modal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>İzin Talebi</h3>
+      <button class="modal-close" onclick="closeModal('leave-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <label>İzin Türü
+        <select id="leave-type">
+          <option value="Yıllık">Yıllık</option>
+          <option value="Sağlık">Sağlık</option>
+          <option value="Mazeret">Mazeret</option>
+        </select>
+      </label>
+      <label>Başlangıç *<input id="leave-start" type="date" /></label>
+      <label>Bitiş *<input id="leave-end" type="date" /></label>
+      <label>Açıklama<textarea id="leave-desc" rows="3"></textarea></label>
+      <label class="checkbox-label">
+        <input id="leave-report" type="checkbox" />
+        Sağlık raporum var
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('leave-modal')">İptal</button>
+      <button class="btn-primary" onclick="submitLeave()">Gönder</button>
+    </div>
+  </div>
+</div>
+
+<!-- Departman Modal -->
+<div id="dept-modal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Departman Ekle</h3>
+      <button class="modal-close" onclick="closeModal('dept-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <label>Departman Adı *<input id="dept-name" type="text" placeholder="örn. Operasyon" /></label>
+      <label>Açıklama<input id="dept-desc" type="text" placeholder="Opsiyonel" /></label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('dept-modal')">İptal</button>
+      <button class="btn-primary" onclick="saveDept()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/app.js"></script>
+</body>
+</html>
